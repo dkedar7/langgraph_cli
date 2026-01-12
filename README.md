@@ -24,13 +24,7 @@ A universal CLI for running **any** LangGraph agent from the terminal. Framework
 
 ## Installation
 
-### From PyPI (when published)
-
-```bash
-pip install langgraph-utils-cli
-```
-
-### From source
+Install from source:
 
 ```bash
 git clone https://github.com/yourusername/langgraph-utils-cli.git
