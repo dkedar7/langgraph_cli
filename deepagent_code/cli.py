@@ -34,25 +34,29 @@ SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇",
 
 
 class Spinner:
-    """A simple terminal spinner for showing activity."""
+    """A simple terminal spinner for showing activity with elapsed time."""
 
     def __init__(self, message: str = "Thinking"):
         self.message = message
         self.running = False
         self.thread = None
         self.frame_idx = 0
+        self.start_time = None
 
     def _spin(self):
-        """Run the spinner animation."""
+        """Run the spinner animation with elapsed time display."""
         while self.running:
             frame = SPINNER_FRAMES[self.frame_idx % len(SPINNER_FRAMES)]
-            print(f"\r{CYAN}{frame}{RESET} {DIM}{self.message}...{RESET}", end="", flush=True)
+            elapsed = time.time() - self.start_time
+            elapsed_str = f"{int(elapsed)}s"
+            print(f"\r{CYAN}{frame}{RESET} {DIM}{self.message}... {elapsed_str}{RESET}", end="", flush=True)
             self.frame_idx += 1
             time.sleep(0.08)
 
     def start(self):
         """Start the spinner."""
         self.running = True
+        self.start_time = time.time()
         self.thread = threading.Thread(target=self._spin, daemon=True)
         self.thread.start()
 
