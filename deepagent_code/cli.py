@@ -9,6 +9,8 @@ import os
 import re
 import sys
 import termios
+import threading
+import time
 import tty
 import uuid
 from pathlib import Path
@@ -26,6 +28,41 @@ from deepagent_code.utils import (
 # ANSI color codes (matching nanocode style)
 RESET, BOLD, DIM = "\033[0m", "\033[1m", "\033[2m"
 BLUE, CYAN, GREEN, YELLOW, RED = "\033[34m", "\033[36m", "\033[32m", "\033[33m", "\033[31m"
+
+# Spinner frames for thinking animation
+SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+
+class Spinner:
+    """A simple terminal spinner for showing activity."""
+
+    def __init__(self, message: str = "Thinking"):
+        self.message = message
+        self.running = False
+        self.thread = None
+        self.frame_idx = 0
+
+    def _spin(self):
+        """Run the spinner animation."""
+        while self.running:
+            frame = SPINNER_FRAMES[self.frame_idx % len(SPINNER_FRAMES)]
+            print(f"\r{CYAN}{frame}{RESET} {DIM}{self.message}...{RESET}", end="", flush=True)
+            self.frame_idx += 1
+            time.sleep(0.08)
+
+    def start(self):
+        """Start the spinner."""
+        self.running = True
+        self.thread = threading.Thread(target=self._spin, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        """Stop the spinner and clear the line."""
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=0.2)
+        # Clear the spinner line
+        print("\r\033[2K", end="", flush=True)
 
 
 def separator() -> str:
@@ -439,8 +476,16 @@ async def run_single_turn_async(
     while True:
         has_interrupt = False
         num_pending_actions = 0
+        first_chunk = True
+        spinner = Spinner("Thinking")
+        spinner.start()
 
         async for chunk in astream_graph_updates(graph, input_data, config=config, stream_mode=stream_mode):
+            # Stop spinner on first chunk
+            if first_chunk:
+                spinner.stop()
+                first_chunk = False
+
             print_chunk(chunk, verbose=verbose)
 
             if chunk.get("status") == "interrupt":
@@ -449,6 +494,10 @@ async def run_single_turn_async(
                 interrupt_data = chunk.get("interrupt", {})
                 action_requests = interrupt_data.get("action_requests", [])
                 num_pending_actions = len(action_requests) if action_requests else 1
+
+        # Ensure spinner is stopped even if no chunks received
+        if first_chunk:
+            spinner.stop()
 
         if has_interrupt and interactive:
             decisions = handle_interrupt_input(num_pending_actions)
@@ -471,8 +520,16 @@ def run_single_turn_sync(
     while True:
         has_interrupt = False
         num_pending_actions = 0
+        first_chunk = True
+        spinner = Spinner("Thinking")
+        spinner.start()
 
         for chunk in stream_graph_updates(graph, input_data, config=config, stream_mode=stream_mode):
+            # Stop spinner on first chunk
+            if first_chunk:
+                spinner.stop()
+                first_chunk = False
+
             print_chunk(chunk, verbose=verbose)
 
             if chunk.get("status") == "interrupt":
@@ -481,6 +538,10 @@ def run_single_turn_sync(
                 interrupt_data = chunk.get("interrupt", {})
                 action_requests = interrupt_data.get("action_requests", [])
                 num_pending_actions = len(action_requests) if action_requests else 1
+
+        # Ensure spinner is stopped even if no chunks received
+        if first_chunk:
+            spinner.stop()
 
         if has_interrupt and interactive:
             decisions = handle_interrupt_input(num_pending_actions)
