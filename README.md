@@ -5,15 +5,28 @@ A Claude Code-style CLI for running LangGraph agents from the terminal.
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/deepagent-code.git
+git clone https://github.com/dkedar7/deepagent-code.git
 cd deepagent-code
 pip install -e .
 ```
 
 ## Quick Start
 
+To use the default agent:
 ```bash
-deepagent-code examples/agent.py
+export ANTHROPIC_API_KEY="your_anthropic_api_key_here"
+deepagent-code
+```
+
+But the real power comes from specifying your own agent file:
+```bash
+deepagent-code path/to/your_agent.py:graph
+```
+
+Or specifying via environment variable:
+```bash
+export DEEPAGENT_AGENT_SPEC="path/to/your_agent.py:graph"
+deepagent-code
 ```
 
 This launches an interactive conversation loop with your agent.
@@ -26,12 +39,6 @@ deepagent-code my_agent.py
 
 # With initial message
 deepagent-code my_agent.py -m "Hello, agent!"
-
-# Custom graph variable
-deepagent-code my_agent.py -g custom_graph
-
-# Async mode
-deepagent-code my_agent.py --async-mode
 
 # Non-interactive (auto-approve interrupts)
 deepagent-code my_agent.py --no-interactive
@@ -69,7 +76,6 @@ Options:
   -c, --config TEXT               Config JSON or file path
   --interactive/--no-interactive  Handle interrupts (default: interactive)
   --async-mode/--sync-mode        Async streaming (default: sync)
-  --stream-mode TEXT              Stream mode (default: "updates")
   -v, --verbose                   Verbose output
 ```
 

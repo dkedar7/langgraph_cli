@@ -579,13 +579,18 @@ def main(
                 print(f"{RED}⏺ Error: {e}{RESET}")
                 sys.exit(1)
 
-        # Validate we have a graph file
+        # If still no graph file, default to examples/agent.py:agent
         if not final_graph_file:
-            print(f"{RED}⏺ Error: No graph file specified.{RESET}")
-            print(f"\n{DIM}Provide either:{RESET}")
-            print(f"  1. GRAPH_FILE argument: langgraph-cli my_agent.py")
-            print(f"  2. DEEPAGENT_AGENT_SPEC env var")
-            sys.exit(1)
+            default_agent_path = Path(__file__).parent.parent / "examples" / "agent.py"
+            if default_agent_path.exists():
+                final_graph_file = str(default_agent_path)
+                final_graph_name = "agent"
+            else:
+                print(f"{RED}⏺ Error: No graph file specified.{RESET}")
+                print(f"\n{DIM}Provide either:{RESET}")
+                print(f"  1. GRAPH_FILE argument: deepagent-code my_agent.py")
+                print(f"  2. DEEPAGENT_AGENT_SPEC env var")
+                sys.exit(1)
 
         # Change to workspace root if specified
         if env_workspace_root:
