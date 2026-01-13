@@ -155,6 +155,75 @@ def load_graph_from_file(file_path: str, graph_name: str = "graph"):
     return graph
 
 
+def load_graph_from_module(module_path: str, graph_name: str = "graph"):
+    """
+    Dynamically load a LangGraph graph from a Python module path.
+
+    Args:
+        module_path: Dotted module path (e.g., "mypackage.agents.chatbot")
+        graph_name: Name of the graph variable (default: "graph")
+
+    Returns:
+        The loaded graph object
+
+    Raises:
+        ModuleNotFoundError: If the module doesn't exist
+        AttributeError: If the graph variable doesn't exist in the module
+    """
+    import importlib
+    module = importlib.import_module(module_path)
+
+    if not hasattr(module, graph_name):
+        raise AttributeError(
+            f"Module '{module_path}' does not have a '{graph_name}' variable. "
+            f"Available: {', '.join(dir(module))}"
+        )
+
+    graph = getattr(module, graph_name)
+    return graph
+
+
+def load_graph(spec: str, default_graph_name: str = "graph"):
+    """
+    Load a graph from either a file path or module path.
+
+    Supports formats:
+        - path/to/file.py (uses default_graph_name)
+        - path/to/file.py:graph_name
+        - package.module (uses default_graph_name)
+        - package.module:graph_name
+
+    Args:
+        spec: File path or module path, optionally with :graph_name suffix
+        default_graph_name: Graph name to use if not specified in spec
+
+    Returns:
+        The loaded graph object
+    """
+    # Parse the spec to extract graph name if present
+    if ':' in spec:
+        path_or_module, graph_name = spec.rsplit(':', 1)
+        if not graph_name:
+            graph_name = default_graph_name
+    else:
+        path_or_module = spec
+        graph_name = default_graph_name
+
+    # Determine if it's a file path or module path
+    # File paths end with .py or contain path separators
+    is_file_path = (
+        path_or_module.endswith('.py') or
+        '/' in path_or_module or
+        '\\' in path_or_module or
+        Path(path_or_module).exists()
+    )
+
+    if is_file_path:
+        return load_graph_from_file(path_or_module, graph_name), graph_name
+    else:
+        return load_graph_from_module(path_or_module, graph_name), graph_name
+
+
 def get_tool_arg_preview(args: Dict[str, Any]) -> str:
     """Get a preview of the first argument value (nanocode style)."""
     if not args:
@@ -494,11 +563,11 @@ def run_conversation_loop(
 
 
 @click.command()
-@click.argument("graph_file", type=click.Path(exists=True), required=False)
+@click.argument("agent_spec", required=False)
 @click.option(
     "--graph-name",
     "-g",
-    help="Name of the graph variable in the file (default: 'graph')",
+    help="Name of the graph variable (default: 'graph', overridden if spec includes :name)",
 )
 @click.option(
     "--message",
@@ -532,7 +601,7 @@ def run_conversation_loop(
     help="Show verbose output including node names",
 )
 def main(
-    graph_file: Optional[str],
+    agent_spec: Optional[str],
     graph_name: Optional[str],
     message: Optional[str],
     config: Optional[str],
@@ -544,10 +613,17 @@ def main(
     """
     Run a LangGraph agent from the command line.
 
+    AGENT_SPEC can be:
+    \b
+    - path/to/file.py           (uses default graph name 'graph')
+    - path/to/file.py:agent     (specifies graph variable name)
+    - package.module            (Python module path)
+    - package.module:agent      (module with graph variable name)
+
     Supports environment variables for configuration:
 
     \b
-    - DEEPAGENT_AGENT_SPEC: Agent location (format: path/to/file.py:variable_name)
+    - DEEPAGENT_AGENT_SPEC: Agent location (same formats as above)
     - DEEPAGENT_WORKSPACE_ROOT: Working directory for the agent
     - DEEPAGENT_CONFIG: Configuration JSON string or path to JSON file
     - DEEPAGENT_STREAM_MODE: Stream mode for LangGraph (updates or values)
@@ -556,9 +632,10 @@ def main(
 
     \b
     Examples:
-        langgraph-cli my_agent.py
-        langgraph-cli my_agent.py -m "Hello, agent!"
-        langgraph-cli my_agent.py -g my_custom_graph
+        deepagent-code my_agent.py
+        deepagent-code my_agent.py:graph
+        deepagent-code mypackage.agents:chatbot
+        deepagent-code -m "Hello, agent!"
     """
     try:
         # Get environment variables
@@ -567,28 +644,19 @@ def main(
         env_config = os.getenv('DEEPAGENT_CONFIG')
         env_stream_mode = os.getenv('DEEPAGENT_STREAM_MODE', 'updates')
 
-        # Resolve graph file and name
-        final_graph_file = graph_file
-        final_graph_name = graph_name or "graph"
+        # Determine which spec to use (CLI arg > env var > default)
+        final_spec = agent_spec or env_agent_spec
+        default_graph_name = graph_name or "graph"
 
-        # If no graph file provided, try DEEPAGENT_AGENT_SPEC
-        if not final_graph_file and env_agent_spec:
-            try:
-                final_graph_file, final_graph_name = parse_agent_spec(env_agent_spec)
-            except ValueError as e:
-                print(f"{RED}⏺ Error: {e}{RESET}")
-                sys.exit(1)
-
-        # If still no graph file, default to examples/agent.py:agent
-        if not final_graph_file:
+        # If still no spec, default to examples/agent.py:agent
+        if not final_spec:
             default_agent_path = Path(__file__).parent.parent / "examples" / "agent.py"
             if default_agent_path.exists():
-                final_graph_file = str(default_agent_path)
-                final_graph_name = "agent"
+                final_spec = f"{default_agent_path}:agent"
             else:
-                print(f"{RED}⏺ Error: No graph file specified.{RESET}")
+                print(f"{RED}⏺ Error: No agent specified.{RESET}")
                 print(f"\n{DIM}Provide either:{RESET}")
-                print(f"  1. GRAPH_FILE argument: deepagent-code my_agent.py")
+                print(f"  1. AGENT_SPEC argument: deepagent-code my_agent.py:graph")
                 print(f"  2. DEEPAGENT_AGENT_SPEC env var")
                 sys.exit(1)
 
@@ -599,8 +667,8 @@ def main(
                 os.chdir(workspace_path)
 
         # Load the graph
-        print(f"{DIM}Loading {final_graph_file}...{RESET}")
-        graph = load_graph_from_file(final_graph_file, final_graph_name)
+        print(f"{DIM}Loading {final_spec}...{RESET}")
+        graph, final_graph_name = load_graph(final_spec, default_graph_name)
 
         # Parse config
         config_dict = None
