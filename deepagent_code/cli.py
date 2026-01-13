@@ -779,6 +779,14 @@ def main(
     except AttributeError as e:
         print(f"{RED}⏺ Error: {e}{RESET}")
         sys.exit(1)
+    except ModuleNotFoundError as e:
+        print(f"{RED}⏺ Error: {e}{RESET}")
+        if "deepagents" in str(e):
+            print(f"\n{DIM}The default agent requires 'deepagents'. Install with:{RESET}")
+            print(f"  pip install 'deepagent-code[default-agent]'")
+            print(f"\n{DIM}Or specify your own agent:{RESET}")
+            print(f"  deepagent-code path/to/your_agent.py:graph")
+        sys.exit(1)
     except Exception as e:
         print(f"{RED}⏺ Error: {e}{RESET}")
         if verbose:
