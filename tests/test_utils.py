@@ -1,7 +1,7 @@
 """Tests for utility functions."""
 import pytest
 import json
-from langgraph_utils_cli.utils import (
+from deepagent_code.utils import (
     parse_interrupt_value,
     serialize_action_request,
     serialize_review_config,

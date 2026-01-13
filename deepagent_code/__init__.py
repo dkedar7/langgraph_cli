@@ -1,11 +1,11 @@
 """
-langgraph_utils_cli - A universal CLI for running arbitrary LangGraph agents.
+deepagent_code - A Claude Code-style CLI for running LangGraph agents.
 
 This package provides utilities for streaming from LangGraph agents,
 handling interrupts, and running agents from the command line.
 """
 
-from langgraph_utils_cli.utils import (
+from deepagent_code.utils import (
     parse_interrupt_value,
     serialize_action_request,
     serialize_review_config,

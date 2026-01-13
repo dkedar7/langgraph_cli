@@ -3,16 +3,16 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "langgraph-utils-cli"
+name = "deepagent-code"
 version = "0.1.0"
-description = "A universal CLI for running arbitrary LangGraph agents from the terminal"
+description = "A Claude Code-style CLI for running LangGraph agents from the terminal"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
     {name = "Your Name", email = "your.email@example.com"}
 ]
-keywords = ["langgraph", "cli", "agents", "llm", "ai"]
+keywords = ["langgraph", "cli", "agents", "llm", "ai", "claude-code"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -27,7 +27,8 @@ classifiers = [
 dependencies = [
     "langgraph>=0.2.0",
     "click>=8.0.0",
-    "rich>=13.0.0",
+    "deepagents",
+    "python-dotenv",
 ]
 
 [project.optional-dependencies]
@@ -40,16 +41,16 @@ dev = [
 ]
 
 [project.scripts]
-langgraph-cli = "langgraph_utils_cli.cli:main"
+deepagent-code = "deepagent_code.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/langgraph-utils-cli"
-Repository = "https://github.com/yourusername/langgraph-utils-cli"
-Issues = "https://github.com/yourusername/langgraph-utils-cli/issues"
+Homepage = "https://github.com/yourusername/deepagent-code"
+Repository = "https://github.com/yourusername/deepagent-code"
+Issues = "https://github.com/yourusername/deepagent-code/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["langgraph_utils_cli*"]
+include = ["deepagent_code*"]
 
 [tool.black]
 line-length = 100
