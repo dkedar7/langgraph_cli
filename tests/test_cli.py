@@ -1,6 +1,6 @@
 """Tests for CLI functions."""
 import pytest
-from langgraph_utils_cli.cli import parse_agent_spec
+from deepagent_code.cli import parse_agent_spec
 
 
 class TestParseAgentSpec:

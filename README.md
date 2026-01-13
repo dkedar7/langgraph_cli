@@ -1,98 +1,120 @@
-# langgraph-utils-cli
+# deepagent-code
 
-Universal CLI for running any LangGraph agent from the terminal. Framework-agnostic with robust interrupt handling.
+A Claude Code-style CLI for running LangGraph agents from the terminal.
+
+![deepagent-code](examples/image.png)
 
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/langgraph-utils-cli.git
-cd langgraph-utils-cli
-pip install -e .
+pip install deepagent-code
+```
+
+Or install directly from GitHub:
+```bash
+pip install git+https://github.com/dkedar7/deepagent-code.git
 ```
 
 ## Quick Start
 
-Create `my_agent.py`:
-
-```python
-from langgraph.graph import StateGraph, MessagesState, START, END
-
-def chatbot(state: MessagesState):
-    return {"messages": [{"role": "assistant", "content": "Hello!"}]}
-
-graph_builder = StateGraph(MessagesState)
-graph_builder.add_node("chatbot", chatbot)
-graph_builder.add_edge(START, "chatbot")
-graph_builder.add_edge("chatbot", END)
-
-graph = graph_builder.compile()
-```
-
-Run it:
-
+Run with the default agent (requires `ANTHROPIC_API_KEY`):
 ```bash
-langgraph-cli my_agent.py -m "Hello!"
+export ANTHROPIC_API_KEY="your_api_key"
+deepagent-code
 ```
+
+Or specify your own agent:
+```bash
+deepagent-code path/to/your_agent.py:graph
+```
+
+This launches an interactive conversation loop with your agent.
 
 ## Usage
 
 ```bash
-# Basic
-langgraph-cli my_agent.py -m "Your message"
+# Use the default agent
+deepagent-code
 
-# With config
-langgraph-cli my_agent.py -m "Hello" -c '{"configurable": {"thread_id": "1"}}'
+# Specify a custom agent file
+deepagent-code my_agent.py:graph
 
-# Custom graph variable
-langgraph-cli my_agent.py -g custom_graph -m "Hello"
+# Use a module path
+deepagent-code mypackage.agents:chatbot
 
-# Async mode
-langgraph-cli my_agent.py --async-mode -m "Hello"
+# With an initial message
+deepagent-code -m "Hello, agent!"
 
-# Non-interactive (auto-approve interrupts)
-langgraph-cli my_agent.py --no-interactive -m "Hello"
+# Non-interactive mode (auto-approve tool calls)
+deepagent-code --no-interactive
+
+# Verbose output
+deepagent-code -v
 ```
+
+## Commands
+
+In the interactive loop:
+- `/q` or `/quit` - Exit
+- `/c` - Clear conversation history
+- `/h` or `/help` - Show help
 
 ## Environment Variables
 
-Compatible with `deepagent-lab`:
-
 ```bash
-# Agent location (path/to/file.py:variable_name)
+# Agent location (path/to/file.py:variable_name or module:variable)
 export DEEPAGENT_AGENT_SPEC="my_agent.py:graph"
-langgraph-cli -m "Hello!"
+deepagent-code
 
 # Working directory
 export DEEPAGENT_WORKSPACE_ROOT="/path/to/workspace"
 
 # Configuration
 export DEEPAGENT_CONFIG='{"configurable": {"thread_id": "1"}}'
-
-# Stream mode (updates or values)
-export DEEPAGENT_STREAM_MODE="values"
 ```
-
-CLI arguments override environment variables.
 
 ## CLI Options
 
 ```
-Usage: langgraph-cli [OPTIONS] [GRAPH_FILE]
+Usage: deepagent-code [OPTIONS] [AGENT_SPEC]
+
+Arguments:
+  AGENT_SPEC  Agent location (path/to/file.py:graph or module:graph)
 
 Options:
   -g, --graph-name TEXT           Graph variable name (default: "graph")
-  -m, --message TEXT              Input message
+  -m, --message TEXT              Initial message
   -c, --config TEXT               Config JSON or file path
   --interactive/--no-interactive  Handle interrupts (default: interactive)
   --async-mode/--sync-mode        Async streaming (default: sync)
-  --stream-mode TEXT              Stream mode (default: "updates")
   -v, --verbose                   Verbose output
+```
+
+## Creating Your Own Agent
+
+Your agent file should export a compiled LangGraph graph:
+
+```python
+# my_agent.py
+from deepagents import create_deep_agent
+from langgraph.checkpoint.memory import MemorySaver
+
+agent = create_deep_agent(
+    name="My Agent",
+    model="anthropic:claude-sonnet-4-20250514",
+    checkpointer=MemorySaver(),
+)
+```
+
+Then run it:
+```bash
+deepagent-code my_agent.py:agent
 ```
 
 ## Programmatic Use
 
 ```python
-from langgraph_utils_cli import stream_graph_updates, prepare_agent_input
+from deepagent_code import stream_graph_updates, prepare_agent_input
 
 input_data = prepare_agent_input(message="Hello!")
 
@@ -100,24 +122,6 @@ for chunk in stream_graph_updates(graph, input_data):
     if chunk.get("chunk"):
         print(chunk["chunk"], end="")
 ```
-
-Async variant:
-
-```python
-from langgraph_utils_cli import astream_graph_updates
-
-async for chunk in astream_graph_updates(graph, input_data):
-    if chunk.get("chunk"):
-        print(chunk["chunk"], end="")
-```
-
-## Examples
-
-See `examples/` directory:
-- `simple_chatbot.py` - Basic usage
-- `tool_calling_agent.py` - Tool calls
-- `interrupt_agent.py` - Human-in-the-loop
-- `async_agent.py` - Async streaming
 
 ## License
 
