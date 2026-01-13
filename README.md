@@ -5,28 +5,25 @@ A Claude Code-style CLI for running LangGraph agents from the terminal.
 ## Installation
 
 ```bash
-git clone https://github.com/dkedar7/deepagent-code.git
-cd deepagent-code
-pip install -e .
+pip install deepagent-code
+```
+
+Or install directly from GitHub:
+```bash
+pip install git+https://github.com/dkedar7/deepagent-code.git
 ```
 
 ## Quick Start
 
-To use the default agent:
+Run with the default agent (requires `ANTHROPIC_API_KEY`):
 ```bash
-export ANTHROPIC_API_KEY="your_anthropic_api_key_here"
+export ANTHROPIC_API_KEY="your_api_key"
 deepagent-code
 ```
 
-But the real power comes from specifying your own agent file:
+Or specify your own agent:
 ```bash
 deepagent-code path/to/your_agent.py:graph
-```
-
-Or specifying via environment variable:
-```bash
-export DEEPAGENT_AGENT_SPEC="path/to/your_agent.py:graph"
-deepagent-code
 ```
 
 This launches an interactive conversation loop with your agent.
@@ -34,14 +31,23 @@ This launches an interactive conversation loop with your agent.
 ## Usage
 
 ```bash
-# Interactive mode (default)
-deepagent-code my_agent.py
+# Use the default agent
+deepagent-code
 
-# With initial message
-deepagent-code my_agent.py -m "Hello, agent!"
+# Specify a custom agent file
+deepagent-code my_agent.py:graph
 
-# Non-interactive (auto-approve interrupts)
-deepagent-code my_agent.py --no-interactive
+# Use a module path
+deepagent-code mypackage.agents:chatbot
+
+# With an initial message
+deepagent-code -m "Hello, agent!"
+
+# Non-interactive mode (auto-approve tool calls)
+deepagent-code --no-interactive
+
+# Verbose output
+deepagent-code -v
 ```
 
 ## Commands
@@ -54,7 +60,7 @@ In the interactive loop:
 ## Environment Variables
 
 ```bash
-# Agent location (path/to/file.py:variable_name)
+# Agent location (path/to/file.py:variable_name or module:variable)
 export DEEPAGENT_AGENT_SPEC="my_agent.py:graph"
 deepagent-code
 
@@ -68,7 +74,10 @@ export DEEPAGENT_CONFIG='{"configurable": {"thread_id": "1"}}'
 ## CLI Options
 
 ```
-Usage: deepagent-code [OPTIONS] [GRAPH_FILE]
+Usage: deepagent-code [OPTIONS] [AGENT_SPEC]
+
+Arguments:
+  AGENT_SPEC  Agent location (path/to/file.py:graph or module:graph)
 
 Options:
   -g, --graph-name TEXT           Graph variable name (default: "graph")
@@ -77,6 +86,27 @@ Options:
   --interactive/--no-interactive  Handle interrupts (default: interactive)
   --async-mode/--sync-mode        Async streaming (default: sync)
   -v, --verbose                   Verbose output
+```
+
+## Creating Your Own Agent
+
+Your agent file should export a compiled LangGraph graph:
+
+```python
+# my_agent.py
+from deepagents import create_deep_agent
+from langgraph.checkpoint.memory import MemorySaver
+
+agent = create_deep_agent(
+    name="My Agent",
+    model="anthropic:claude-sonnet-4-20250514",
+    checkpointer=MemorySaver(),
+)
+```
+
+Then run it:
+```bash
+deepagent-code my_agent.py:agent
 ```
 
 ## Programmatic Use

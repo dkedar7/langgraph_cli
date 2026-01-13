@@ -1,8 +1,8 @@
 """
-Default agent configuration for deepagent-lab.
+Default agent configuration for deepagent-code.
 
 This agent is used when no custom agent is specified. It provides basic
-notebook manipulation capabilities with filesystem access.
+conversation capabilities with filesystem access and bash command execution.
 """
 import os
 import subprocess
@@ -14,23 +14,24 @@ from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from langgraph.checkpoint.memory import MemorySaver
 
-# Kernel clients cache
-kernel_clients = {}
 
 backend = FilesystemBackend(
     root_dir=os.getcwd(),
     virtual_mode=True
 )
 
+
 def bash(command: str):
     """Execute a bash command and return the output.
-    
+
     Args:
-        command (str): The bash command to execute."""
+        command (str): The bash command to execute.
+    """
     result = subprocess.run(
         command, shell=True, capture_output=True, text=True, timeout=30
     )
     return (result.stdout + result.stderr).strip() or "(empty)"
+
 
 # Create agent with configuration
 agent = create_deep_agent(

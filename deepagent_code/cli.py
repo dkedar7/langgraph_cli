@@ -709,16 +709,17 @@ def main(
         final_spec = agent_spec or env_agent_spec
         default_graph_name = graph_name or "graph"
 
-        # If still no spec, default to examples/agent.py:agent
+        # If no spec provided, try the default agent
         if not final_spec:
             default_agent_path = Path(__file__).parent.parent / "examples" / "agent.py"
             if default_agent_path.exists():
                 final_spec = f"{default_agent_path}:agent"
             else:
                 print(f"{RED}⏺ Error: No agent specified.{RESET}")
-                print(f"\n{DIM}Provide either:{RESET}")
-                print(f"  1. AGENT_SPEC argument: deepagent-code my_agent.py:graph")
-                print(f"  2. DEEPAGENT_AGENT_SPEC env var")
+                print(f"\n{DIM}Usage:{RESET}")
+                print(f"  deepagent-code path/to/agent.py:graph")
+                print(f"  deepagent-code mypackage.module:agent")
+                print(f"\n{DIM}Or set DEEPAGENT_AGENT_SPEC environment variable{RESET}")
                 sys.exit(1)
 
         # Change to workspace root if specified
@@ -781,11 +782,7 @@ def main(
         sys.exit(1)
     except ModuleNotFoundError as e:
         print(f"{RED}⏺ Error: {e}{RESET}")
-        if "deepagents" in str(e):
-            print(f"\n{DIM}The default agent requires 'deepagents'. Install with:{RESET}")
-            print(f"  pip install 'deepagent-code[default-agent]'")
-            print(f"\n{DIM}Or specify your own agent:{RESET}")
-            print(f"  deepagent-code path/to/your_agent.py:graph")
+        print(f"\n{DIM}Make sure your agent's dependencies are installed.{RESET}")
         sys.exit(1)
     except Exception as e:
         print(f"{RED}⏺ Error: {e}{RESET}")
