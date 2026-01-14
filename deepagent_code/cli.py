@@ -8,13 +8,19 @@ import json
 import os
 import re
 import sys
-import termios
 import threading
 import time
-import tty
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+# Platform-specific imports for keyboard input
+IS_WINDOWS = sys.platform == "win32"
+if IS_WINDOWS:
+    import msvcrt
+else:
+    import termios
+    import tty
 
 import click
 
@@ -367,28 +373,45 @@ def print_chunk(chunk: Dict[str, Any], verbose: bool = False):
 
 
 def get_key() -> str:
-    """Read a single keypress from stdin."""
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
-        # Handle escape sequences (arrow keys)
-        if ch == '\x1b':
-            ch2 = sys.stdin.read(1)
-            if ch2 == '[':
-                ch3 = sys.stdin.read(1)
-                if ch3 == 'A':
-                    return 'up'
-                elif ch3 == 'B':
-                    return 'down'
-        elif ch == '\r' or ch == '\n':
+    """Read a single keypress from stdin (cross-platform)."""
+    if IS_WINDOWS:
+        # Windows implementation using msvcrt
+        ch = msvcrt.getch()
+        if ch in (b'\x00', b'\xe0'):  # Special keys (arrows, function keys)
+            ch2 = msvcrt.getch()
+            if ch2 == b'H':
+                return 'up'
+            elif ch2 == b'P':
+                return 'down'
+            return ch2.decode('utf-8', errors='ignore')
+        elif ch == b'\r':
             return 'enter'
-        elif ch == '\x03':  # Ctrl+C
+        elif ch == b'\x03':  # Ctrl+C
             return 'ctrl-c'
-        return ch
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return ch.decode('utf-8', errors='ignore')
+    else:
+        # Unix implementation using termios/tty
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+            # Handle escape sequences (arrow keys)
+            if ch == '\x1b':
+                ch2 = sys.stdin.read(1)
+                if ch2 == '[':
+                    ch3 = sys.stdin.read(1)
+                    if ch3 == 'A':
+                        return 'up'
+                    elif ch3 == 'B':
+                        return 'down'
+            elif ch == '\r' or ch == '\n':
+                return 'enter'
+            elif ch == '\x03':  # Ctrl+C
+                return 'ctrl-c'
+            return ch
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
 def select_option(options: List[str], prompt: str = "Select an option:") -> int:
