@@ -24,6 +24,13 @@ else:
 
 import click
 
+# Try to import readline for tab completion (not available on all platforms)
+try:
+    import readline
+    HAS_READLINE = True
+except ImportError:
+    HAS_READLINE = False
+
 from deepagent_code.utils import (
     prepare_agent_input,
     stream_graph_updates,
@@ -33,10 +40,108 @@ from deepagent_code.utils import (
 
 # ANSI color codes (matching nanocode style)
 RESET, BOLD, DIM = "\033[0m", "\033[1m", "\033[2m"
+ITALIC, UNDERLINE = "\033[3m", "\033[4m"
 BLUE, CYAN, GREEN, YELLOW, RED = "\033[34m", "\033[36m", "\033[32m", "\033[33m", "\033[31m"
+MAGENTA, WHITE, GRAY = "\033[35m", "\033[37m", "\033[90m"
+
+# Bright variants for gradient effects
+BRIGHT_CYAN, BRIGHT_BLUE = "\033[96m", "\033[94m"
+BRIGHT_GREEN, BRIGHT_YELLOW = "\033[92m", "\033[93m"
 
 # Spinner frames for thinking animation
 SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+
+# Version info
+__version__ = "0.1.1"
+
+
+# Slash command registry
+class SlashCommand:
+    """Represents a slash command with its handler and metadata."""
+
+    def __init__(
+        self,
+        name: str,
+        handler: callable,
+        description: str,
+        aliases: Optional[List[str]] = None,
+        usage: Optional[str] = None,
+    ):
+        self.name = name
+        self.handler = handler
+        self.description = description
+        self.aliases = aliases or []
+        self.usage = usage or f"/{name}"
+
+    def execute(self, args: str, context: Dict[str, Any]) -> Optional[str]:
+        """Execute the command with given arguments and context."""
+        return self.handler(args, context)
+
+
+class CommandRegistry:
+    """Registry for slash commands."""
+
+    def __init__(self):
+        self._commands: Dict[str, SlashCommand] = {}
+        self._alias_map: Dict[str, str] = {}
+
+    def register(self, command: SlashCommand):
+        """Register a slash command."""
+        self._commands[command.name] = command
+        for alias in command.aliases:
+            self._alias_map[alias] = command.name
+
+    def get(self, name: str) -> Optional[SlashCommand]:
+        """Get a command by name or alias."""
+        # Check if it's an alias
+        if name in self._alias_map:
+            name = self._alias_map[name]
+        return self._commands.get(name)
+
+    def all_commands(self) -> List[SlashCommand]:
+        """Get all registered commands."""
+        return list(self._commands.values())
+
+    def parse_input(self, user_input: str) -> Tuple[Optional[str], str]:
+        """Parse user input to extract command name and arguments.
+
+        Returns:
+            Tuple of (command_name, arguments) or (None, original_input) if not a command
+        """
+        if not user_input.startswith("/"):
+            return None, user_input
+
+        # Split into command and args
+        parts = user_input[1:].split(maxsplit=1)
+        cmd_name = parts[0].lower() if parts else ""
+        args = parts[1] if len(parts) > 1 else ""
+
+        return cmd_name, args
+
+
+# Global command registry
+command_registry = CommandRegistry()
+
+
+def register_command(
+    name: str,
+    description: str,
+    aliases: Optional[List[str]] = None,
+    usage: Optional[str] = None,
+):
+    """Decorator to register a slash command handler."""
+    def decorator(func):
+        command = SlashCommand(
+            name=name,
+            handler=func,
+            description=description,
+            aliases=aliases or [],
+            usage=usage,
+        )
+        command_registry.register(command)
+        return func
+    return decorator
 
 
 class Spinner:
@@ -75,13 +180,44 @@ class Spinner:
         print("\r\033[2K", end="", flush=True)
 
 
-def separator() -> str:
-    """Return a dim separator line."""
+def get_terminal_width() -> int:
+    """Get terminal width, capped at 100 for readability."""
     try:
-        width = min(os.get_terminal_size().columns, 80)
+        return min(os.get_terminal_size().columns, 100)
     except OSError:
-        width = 80
-    return f"{DIM}{'─' * width}{RESET}"
+        return 80
+
+
+def separator(style: str = "light") -> str:
+    """Return a styled separator line.
+
+    Args:
+        style: 'light' for thin line, 'heavy' for thick line, 'dots' for dotted
+    """
+    width = get_terminal_width()
+    if style == "heavy":
+        return f"{DIM}{'━' * width}{RESET}"
+    elif style == "dots":
+        return f"{DIM}{'·' * width}{RESET}"
+    else:
+        return f"{DIM}{'─' * width}{RESET}"
+
+
+def print_welcome():
+    """Print a welcome message with tips."""
+    tips = [
+        f"Type {CYAN}/help{RESET} for commands",
+        f"Use {CYAN}/c{RESET} to clear conversation",
+        f"Press {CYAN}Ctrl+C{RESET} to exit",
+        f"Press {CYAN}Tab{RESET} to autocomplete commands",
+    ]
+    tip = tips[int(time.time()) % len(tips)]  # Rotate tips
+    print(f"\n{DIM}Tip: {tip}{RESET}\n")
+
+
+def print_goodbye():
+    """Print a goodbye message."""
+    print(f"\n{DIM}Goodbye!{RESET}\n")
 
 
 def get_agent_name(graph) -> str:
@@ -101,11 +237,8 @@ def get_agent_name(graph) -> str:
 
 
 def print_header_box(agent_name: str, cwd: str):
-    """Print a box-drawn header with the agent name."""
-    try:
-        term_width = min(os.get_terminal_size().columns, 80)
-    except OSError:
-        term_width = 80
+    """Print an elegant header with the agent name and version."""
+    term_width = get_terminal_width()
 
     # Box drawing characters
     TL, TR, BL, BR = "╭", "╮", "╰", "╯"  # corners
@@ -119,17 +252,28 @@ def print_header_box(agent_name: str, cwd: str):
     cwd_display = cwd if len(cwd) <= inner_width else "..." + cwd[-(inner_width - 3):]
     cwd_line = cwd_display.center(inner_width)
 
-    # Print the box
-    print(f"{CYAN}{TL}{H * (term_width - 2)}{TR}{RESET}")
-    print(f"{CYAN}{V}{RESET} {BOLD}{title_line}{RESET} {CYAN}{V}{RESET}")
+    # Print the box with gradient-style coloring
+    print()
+    print(f"{BRIGHT_CYAN}{TL}{H * (term_width - 2)}{TR}{RESET}")
+    print(f"{BRIGHT_CYAN}{V}{RESET} {BOLD}{BRIGHT_CYAN}{title_line}{RESET} {BRIGHT_CYAN}{V}{RESET}")
     print(f"{CYAN}{V}{RESET} {DIM}{cwd_line}{RESET} {CYAN}{V}{RESET}")
     print(f"{CYAN}{BL}{H * (term_width - 2)}{BR}{RESET}")
-    print()
 
 
 def render_markdown(text: str) -> str:
-    """Simple markdown rendering for **bold** text."""
-    return re.sub(r"\*\*(.+?)\*\*", f"{BOLD}\\1{RESET}", text)
+    """Render markdown formatting for terminal display.
+
+    Supports: **bold**, *italic*, `code`, [links](url)
+    """
+    # Bold: **text**
+    text = re.sub(r"\*\*(.+?)\*\*", f"{BOLD}\\1{RESET}", text)
+    # Italic: *text* (but not inside **)
+    text = re.sub(r"(?<!\*)\*([^*]+?)\*(?!\*)", f"{ITALIC}\\1{RESET}", text)
+    # Inline code: `code`
+    text = re.sub(r"`([^`]+?)`", f"{CYAN}\\1{RESET}", text)
+    # Links: [text](url) - show text in underline
+    text = re.sub(r"\[([^\]]+?)\]\([^)]+?\)", f"{UNDERLINE}\\1{RESET}", text)
+    return text
 
 
 def parse_agent_spec(agent_spec: str) -> Tuple[str, str]:
@@ -335,41 +479,45 @@ def print_chunk(chunk: Dict[str, Any], verbose: bool = False):
             if verbose:
                 print(f"{DIM}[{node}]{RESET} {text}", end="")
             else:
-                # Print text output with cyan bullet (only on first chunk or after newline)
+                # Print text output with cyan bullet
                 print(f"{CYAN}⏺{RESET} {render_markdown(text)}", end="")
 
-        # Handle tool calls - green bullet with tool name
+        # Handle tool calls - green tool name
         elif "tool_calls" in chunk:
             for tool_call in chunk["tool_calls"]:
                 tool_name = tool_call["name"]
                 args = tool_call.get("args", {})
                 arg_preview = get_tool_arg_preview(args)
 
-                print(f"\n{GREEN}⏺ {tool_name.capitalize()}{RESET}({DIM}{arg_preview}{RESET})")
+                print(f"\n{GREEN}● {tool_name}{RESET}")
+                if arg_preview:
+                    print(f"  {DIM}└─ {arg_preview}{RESET}")
 
         # Handle tool results - indented with result preview
         elif "tool_result" in chunk:
             result = chunk.get("tool_result", "")
             preview = format_result_preview(str(result))
-            print(f"  {DIM}⎿  {preview}{RESET}")
+            print(f"  {DIM}   ↳ {preview}{RESET}")
 
     elif status == "interrupt":
         interrupt_data = chunk.get("interrupt", {})
         action_requests = interrupt_data.get("action_requests", [])
 
-        print(f"\n{YELLOW}⏺ Interrupt{RESET}")
+        print(f"\n{YELLOW}⚠ Action Required{RESET}")
         if action_requests:
             for i, action in enumerate(action_requests):
                 tool = action.get('tool', 'unknown')
                 args_preview = get_tool_arg_preview(action.get('args', {}))
-                print(f"  {DIM}{i + 1}. {tool}({args_preview}){RESET}")
+                print(f"  {DIM}{i + 1}. {tool}{RESET}")
+                if args_preview:
+                    print(f"     {DIM}└─ {args_preview}{RESET}")
 
     elif status == "complete":
         pass  # No output on complete (nanocode style)
 
     elif status == "error":
         error_msg = chunk.get("error", "Unknown error")
-        print(f"\n{RED}⏺ Error: {error_msg}{RESET}")
+        print(f"\n{RED}✗ Error: {error_msg}{RESET}")
 
 
 def get_key() -> str:
@@ -604,6 +752,320 @@ def run_single_turn_sync(
     return time.time() - start_time
 
 
+def print_help():
+    """Print formatted help information."""
+    print(f"\n{BOLD}{BRIGHT_CYAN}Commands{RESET}")
+    print(f"{DIM}{'─' * 40}{RESET}")
+
+    # Get all registered commands and display them
+    commands = command_registry.all_commands()
+    for cmd in sorted(commands, key=lambda c: c.name):
+        aliases_str = ""
+        if cmd.aliases:
+            aliases_str = f", {CYAN}/{RESET}, {CYAN}/".join([""] + cmd.aliases)[4:]
+        print(f"  {CYAN}/{cmd.name}{RESET}{aliases_str}")
+        print(f"    {DIM}{cmd.description}{RESET}")
+
+    print()
+    print(f"{BOLD}{BRIGHT_CYAN}Shortcuts{RESET}")
+    print(f"{DIM}{'─' * 40}{RESET}")
+    print(f"  {CYAN}Tab{RESET}               Autocomplete commands")
+    print(f"  {CYAN}Ctrl+C{RESET}            Exit at any time")
+    print(f"  {CYAN}↑/↓{RESET}               Navigate options")
+    print()
+
+
+# --- Built-in Slash Commands ---
+
+@register_command(
+    name="help",
+    description="Show this help message",
+    aliases=["h", "?"],
+)
+def cmd_help(args: str, context: Dict[str, Any]) -> Optional[str]:
+    """Display help information."""
+    if args:
+        # Show help for a specific command
+        cmd = command_registry.get(args)
+        if cmd:
+            print(f"\n{BOLD}{BRIGHT_CYAN}/{cmd.name}{RESET}")
+            print(f"  {cmd.description}")
+            if cmd.aliases:
+                print(f"  {DIM}Aliases: /{', /'.join(cmd.aliases)}{RESET}")
+            if cmd.usage:
+                print(f"  {DIM}Usage: {cmd.usage}{RESET}")
+            print()
+        else:
+            print(f"{YELLOW}Unknown command: /{args}{RESET}")
+    else:
+        print_help()
+    return None
+
+
+@register_command(
+    name="quit",
+    description="Exit the CLI",
+    aliases=["q", "exit"],
+)
+def cmd_quit(args: str, context: Dict[str, Any]) -> Optional[str]:
+    """Exit the CLI."""
+    return "exit"  # Special return value to signal exit
+
+
+@register_command(
+    name="clear",
+    description="Clear conversation history",
+    aliases=["c"],
+)
+def cmd_clear(args: str, context: Dict[str, Any]) -> Optional[str]:
+    """Clear the conversation history."""
+    context["config"]["configurable"]["thread_id"] = str(uuid.uuid4())
+    print(f"\n{GREEN}✓ Conversation cleared{RESET}\n")
+    return None
+
+
+@register_command(
+    name="version",
+    description="Show version information",
+    aliases=["v"],
+)
+def cmd_version(args: str, context: Dict[str, Any]) -> Optional[str]:
+    """Display version information."""
+    print(f"\n{BOLD}{BRIGHT_CYAN}deepagent-code{RESET} v{__version__}")
+    agent_name = context.get("agent_name", "Unknown")
+    print(f"{DIM}Agent: {agent_name}{RESET}\n")
+    return None
+
+
+@register_command(
+    name="status",
+    description="Show current session status",
+    aliases=["s"],
+)
+def cmd_status(args: str, context: Dict[str, Any]) -> Optional[str]:
+    """Display current session status."""
+    config = context.get("config", {})
+    thread_id = config.get("configurable", {}).get("thread_id", "N/A")
+    agent_name = context.get("agent_name", "Unknown")
+    verbose = context.get("verbose", False)
+    use_async = context.get("use_async", False)
+    stream_mode = context.get("stream_mode", "updates")
+
+    print(f"\n{BOLD}{BRIGHT_CYAN}Session Status{RESET}")
+    print(f"{DIM}{'─' * 30}{RESET}")
+    print(f"  {DIM}Agent:{RESET}       {agent_name}")
+    print(f"  {DIM}Thread ID:{RESET}   {thread_id[:8]}...")
+    print(f"  {DIM}Mode:{RESET}        {'async' if use_async else 'sync'}")
+    print(f"  {DIM}Stream:{RESET}      {stream_mode}")
+    print(f"  {DIM}Verbose:{RESET}     {'on' if verbose else 'off'}")
+    print(f"  {DIM}CWD:{RESET}         {os.getcwd()}")
+    print()
+    return None
+
+
+@register_command(
+    name="config",
+    description="Show or set configuration",
+    aliases=["cfg"],
+    usage="/config [key] [value]",
+)
+def cmd_config(args: str, context: Dict[str, Any]) -> Optional[str]:
+    """Show or modify configuration."""
+    config = context.get("config", {})
+
+    if not args:
+        # Show current config
+        print(f"\n{BOLD}{BRIGHT_CYAN}Configuration{RESET}")
+        print(f"{DIM}{'─' * 30}{RESET}")
+        for key, value in config.items():
+            if isinstance(value, dict):
+                print(f"  {CYAN}{key}:{RESET}")
+                for k, v in value.items():
+                    # Truncate long values
+                    v_str = str(v)
+                    if len(v_str) > 30:
+                        v_str = v_str[:30] + "..."
+                    print(f"    {DIM}{k}:{RESET} {v_str}")
+            else:
+                print(f"  {CYAN}{key}:{RESET} {value}")
+        print()
+    else:
+        parts = args.split(maxsplit=1)
+        if len(parts) == 1:
+            # Show specific config key
+            key = parts[0]
+            if key in config:
+                print(f"\n{CYAN}{key}:{RESET} {config[key]}\n")
+            elif "configurable" in config and key in config["configurable"]:
+                print(f"\n{CYAN}{key}:{RESET} {config['configurable'][key]}\n")
+            else:
+                print(f"{YELLOW}Unknown config key: {key}{RESET}")
+        else:
+            # Set config value
+            key, value = parts
+            if key == "verbose":
+                context["verbose"] = value.lower() in ("true", "1", "on", "yes")
+                print(f"{GREEN}✓ Set verbose = {context['verbose']}{RESET}")
+            else:
+                print(f"{YELLOW}Cannot modify {key} at runtime{RESET}")
+    return None
+
+
+@register_command(
+    name="history",
+    description="Show recent messages (if available)",
+    aliases=["hist"],
+)
+def cmd_history(args: str, context: Dict[str, Any]) -> Optional[str]:
+    """Display conversation history if available."""
+    graph = context.get("graph")
+    config = context.get("config", {})
+
+    if graph is None:
+        print(f"{YELLOW}No graph available{RESET}")
+        return None
+
+    try:
+        # Try to get state from the graph's checkpointer
+        if hasattr(graph, "get_state"):
+            state = graph.get_state(config)
+            if state and hasattr(state, "values"):
+                messages = state.values.get("messages", [])
+                if messages:
+                    print(f"\n{BOLD}{BRIGHT_CYAN}Conversation History{RESET}")
+                    print(f"{DIM}{'─' * 40}{RESET}")
+
+                    # Show last N messages
+                    limit = 10
+                    if args:
+                        try:
+                            limit = int(args)
+                        except ValueError:
+                            pass
+
+                    for msg in messages[-limit:]:
+                        role = getattr(msg, "type", "unknown")
+                        content = getattr(msg, "content", str(msg))
+
+                        if role == "human":
+                            print(f"\n  {BRIGHT_BLUE}You:{RESET}")
+                        elif role == "ai":
+                            print(f"\n  {BRIGHT_CYAN}Agent:{RESET}")
+                        else:
+                            print(f"\n  {DIM}{role}:{RESET}")
+
+                        # Truncate long content
+                        if len(content) > 200:
+                            content = content[:200] + "..."
+                        print(f"  {DIM}{content}{RESET}")
+                    print()
+                else:
+                    print(f"{DIM}No messages in history{RESET}")
+            else:
+                print(f"{DIM}No state available{RESET}")
+        else:
+            print(f"{DIM}Graph does not support state retrieval{RESET}")
+    except Exception as e:
+        print(f"{DIM}Could not retrieve history: {e}{RESET}")
+
+    return None
+
+
+@register_command(
+    name="reset",
+    description="Reset the session (clear history and restart)",
+    aliases=["restart"],
+)
+def cmd_reset(args: str, context: Dict[str, Any]) -> Optional[str]:
+    """Reset the session."""
+    context["config"]["configurable"]["thread_id"] = str(uuid.uuid4())
+    print(f"\n{GREEN}✓ Session reset{RESET}")
+    print(f"{DIM}New thread ID: {context['config']['configurable']['thread_id'][:8]}...{RESET}\n")
+    return None
+
+
+@register_command(
+    name="verbose",
+    description="Toggle verbose output mode",
+    usage="/verbose [on|off]",
+)
+def cmd_verbose(args: str, context: Dict[str, Any]) -> Optional[str]:
+    """Toggle or show verbose output mode."""
+    verbose = context.get("verbose", False)
+    if args:
+        if args.lower() in ("on", "true", "1"):
+            context["verbose"] = True
+            print(f"{GREEN}✓ Verbose mode enabled{RESET}")
+        elif args.lower() in ("off", "false", "0"):
+            context["verbose"] = False
+            print(f"{GREEN}✓ Verbose mode disabled{RESET}")
+    else:
+        print(f"{DIM}Verbose mode: {'on' if verbose else 'off'}{RESET}")
+        print(f"{DIM}Use /verbose on or /verbose off to change{RESET}")
+    return None
+
+
+def get_command_suggestions(partial: str) -> List[str]:
+    """Get command suggestions based on partial input.
+
+    Args:
+        partial: Partial command name (without leading /)
+
+    Returns:
+        List of matching command names
+    """
+    partial_lower = partial.lower()
+    suggestions = []
+
+    for cmd in command_registry.all_commands():
+        # Check main command name
+        if cmd.name.startswith(partial_lower):
+            suggestions.append(cmd.name)
+        # Check aliases
+        for alias in cmd.aliases:
+            if alias.startswith(partial_lower) and cmd.name not in suggestions:
+                suggestions.append(cmd.name)
+
+    return sorted(suggestions)
+
+
+def command_completer(text: str, state: int) -> Optional[str]:
+    """Readline completer for slash commands.
+
+    Args:
+        text: Current text being completed
+        state: State index for multiple completions
+
+    Returns:
+        Next completion or None
+    """
+    # Only complete if starting with /
+    if not text.startswith("/"):
+        return None
+
+    partial = text[1:]  # Remove leading /
+    suggestions = ["/" + s for s in get_command_suggestions(partial)]
+
+    if state < len(suggestions):
+        return suggestions[state]
+    return None
+
+
+def setup_readline_completion():
+    """Set up readline for tab completion of slash commands."""
+    if not HAS_READLINE:
+        return
+
+    readline.set_completer(command_completer)
+    readline.set_completer_delims(" \t\n")
+
+    # Use tab for completion
+    if sys.platform == "darwin":
+        readline.parse_and_bind("bind ^I rl_complete")
+    else:
+        readline.parse_and_bind("tab: complete")
+
+
 def run_conversation_loop(
     graph,
     config: Dict[str, Any],
@@ -618,14 +1080,31 @@ def run_conversation_loop(
     Run a continuous conversation loop with the LangGraph agent.
     Styled after Claude Code / nanocode.
     """
+    # Set up tab completion for slash commands
+    setup_readline_completion()
+
     # Print box-drawn header with agent name
     print_header_box(agent_name, os.getcwd())
 
+    # Print welcome message with tips
+    print_welcome()
+
+    # Create command context (mutable dict that commands can modify)
+    command_context = {
+        "graph": graph,
+        "config": config,
+        "agent_name": agent_name,
+        "use_async": use_async,
+        "interactive": interactive,
+        "verbose": verbose,
+        "stream_mode": stream_mode,
+    }
+
     # Process initial message if provided
     if initial_message:
-        print(separator())
-        print(f"{BOLD}{BLUE}❯{RESET} {initial_message}")
-        print(separator())
+        print(f"\n{BOLD}{BRIGHT_BLUE}You{RESET}")
+        print(f"{initial_message}")
+        print()
 
         if use_async:
             duration = asyncio.run(
@@ -639,29 +1118,40 @@ def run_conversation_loop(
     # Main conversation loop
     while True:
         try:
-            print(separator())
-            user_input = input(f"{BOLD}{BLUE}❯{RESET} ").strip()
-            print(separator())
+            print(separator("dots"))
+            user_input = input(f"{BOLD}{BRIGHT_BLUE}❯{RESET} ").strip()
 
             if not user_input:
                 continue
 
-            # Handle special commands
-            if user_input in ("/q", "/quit", "/exit", "exit"):
+            # Check if it's a slash command
+            cmd_name, cmd_args = command_registry.parse_input(user_input)
+
+            if cmd_name is not None:
+                # It's a slash command
+                cmd = command_registry.get(cmd_name)
+                if cmd:
+                    result = cmd.execute(cmd_args, command_context)
+                    # Update local vars from context (commands may modify these)
+                    verbose = command_context.get("verbose", verbose)
+                    if result == "exit":
+                        break
+                else:
+                    # Show suggestions for unknown commands
+                    suggestions = get_command_suggestions(cmd_name)
+                    print(f"{YELLOW}Unknown command: /{cmd_name}{RESET}")
+                    if suggestions:
+                        suggestion_str = ", ".join([f"/{s}" for s in suggestions[:3]])
+                        print(f"{DIM}Did you mean: {suggestion_str}?{RESET}")
+                    else:
+                        print(f"{DIM}Type /help to see available commands{RESET}")
+                continue
+
+            # Handle "exit" as a special case (without slash)
+            if user_input.lower() == "exit":
                 break
 
-            if user_input == "/c":
-                # Generate new thread_id to start fresh conversation
-                config["configurable"]["thread_id"] = str(uuid.uuid4())
-                print(f"{GREEN}⏺ Cleared conversation{RESET}")
-                continue
-
-            if user_input in ("/h", "/help"):
-                print(f"\n{BOLD}Commands:{RESET}")
-                print(f"  /q, /quit, exit  - Exit")
-                print(f"  /c               - Clear conversation")
-                print(f"  /h, /help        - Show this help\n")
-                continue
+            print()  # Space before response
 
             # Run the agent
             if use_async:
@@ -676,7 +1166,10 @@ def run_conversation_loop(
         except (EOFError, KeyboardInterrupt):
             break
         except Exception as err:
-            print(f"{RED}⏺ Error: {err}{RESET}")
+            print(f"\n{RED}✗ Error: {err}{RESET}\n")
+
+    # Print goodbye message
+    print_goodbye()
 
 
 @click.command()
@@ -784,9 +1277,12 @@ def main(
             if workspace_path.exists():
                 os.chdir(workspace_path)
 
-        # Load the graph
-        print(f"{DIM}Loading {final_spec}...{RESET}")
+        # Load the graph with a spinner
+        spinner = Spinner("Loading agent")
+        spinner.start()
         graph, final_graph_name = load_graph(final_spec, default_graph_name)
+        spinner.stop()
+        print(f"{GREEN}✓{RESET} {DIM}Loaded {final_spec}{RESET}")
 
         # Parse config
         config_dict = None
