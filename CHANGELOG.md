@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.2] - 2026-01-13
+
+### Added
+- Slash command system with registry for extensible commands
+- Tab completion for slash commands using readline
+- Command suggestions for unknown commands ("Did you mean: /help?")
+- New commands: /status, /config, /version, /history, /reset, /verbose
+- Cross-platform keyboard input support (Windows msvcrt, Unix termios)
+
+### Changed
+- Refactored command handling to use centralized registry
+- Improved help display to dynamically list all registered commands
+- Removed emoji tool icons for cleaner, more professional output
+
 ## [0.1.1] - 2026-01-12
 
 ### Added
