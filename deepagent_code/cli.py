@@ -273,8 +273,71 @@ def get_agent_description(graph) -> Optional[str]:
     return None
 
 
+def text_to_ascii_art(text: str) -> List[str]:
+    """Convert text to ASCII art using a clean block font.
+
+    Returns a list of strings, one per line of the ASCII art.
+    All characters are exactly 3 chars wide for consistent spacing.
+    """
+    # Clean 3-line block font - each char is exactly 3 wide
+    FONT = {
+        'A': ['▄▀▄', '█▀█', '▀ ▀'],
+        'B': ['█▀▄', '█▀▄', '▀▀▀'],
+        'C': ['▄▀▀', '█  ', '▀▀▀'],
+        'D': ['█▀▄', '█ █', '▀▀▀'],
+        'E': ['█▀▀', '█▀▀', '▀▀▀'],
+        'F': ['█▀▀', '█▀▀', '▀  '],
+        'G': ['▄▀▀', '█▀█', '▀▀▀'],
+        'H': ['█ █', '█▀█', '▀ ▀'],
+        'I': ['▀█▀', ' █ ', '▀▀▀'],
+        'J': ['▀▀█', '  █', '▀▀▀'],
+        'K': ['█ █', '█▀▄', '▀ ▀'],
+        'L': ['█  ', '█  ', '▀▀▀'],
+        'M': ['█▄█', '█ █', '▀ ▀'],
+        'N': ['█▀█', '█ █', '▀ ▀'],
+        'O': ['▄▀▄', '█ █', '▀▀▀'],
+        'P': ['█▀▄', '█▀▀', '▀  '],
+        'Q': ['▄▀▄', '█ █', '▀▀█'],
+        'R': ['█▀▄', '█▀▄', '▀ ▀'],
+        'S': ['▄▀▀', '▀▀▄', '▀▀▀'],
+        'T': ['▀█▀', ' █ ', ' ▀ '],
+        'U': ['█ █', '█ █', '▀▀▀'],
+        'V': ['█ █', '█ █', ' ▀ '],
+        'W': ['█ █', '█▀█', '▀ ▀'],
+        'X': ['▀▄▀', ' █ ', '▀ ▀'],
+        'Y': ['█ █', ' █ ', ' ▀ '],
+        'Z': ['▀▀█', ' █ ', '█▀▀'],
+        '0': ['▄▀▄', '█ █', '▀▀▀'],
+        '1': ['▄█ ', ' █ ', '▀▀▀'],
+        '2': ['▀▀█', '▄▀▀', '▀▀▀'],
+        '3': ['▀▀█', ' ▀█', '▀▀▀'],
+        '4': ['█ █', '▀▀█', '  ▀'],
+        '5': ['█▀▀', '▀▀▄', '▀▀▀'],
+        '6': ['▄▀▀', '█▀█', '▀▀▀'],
+        '7': ['▀▀█', '  █', '  ▀'],
+        '8': ['▄▀▄', '█▀█', '▀▀▀'],
+        '9': ['▄▀█', '▀▀█', '▀▀▀'],
+        ' ': ['   ', '   ', '   '],
+        '-': ['   ', '▀▀▀', '   '],
+        '_': ['   ', '   ', '▀▀▀'],
+        '.': ['   ', '   ', ' ▀ '],
+    }
+
+    # Default char for unknown characters
+    DEFAULT = ['   ', ' █ ', '   ']
+
+    lines = ['', '', '']
+    for char in text.upper():
+        char_art = FONT.get(char, DEFAULT)
+        for i in range(3):
+            lines[i] += char_art[i] + ' '
+
+    # Remove only the final trailing space we added (not internal spaces from chars like T, P)
+    return [line[:-1] if line.endswith(' ') else line for line in lines]
+
+
 def print_header_box(agent_name: str, cwd: str, description: Optional[str] = None):
-    """Print an elegant header with the agent name, optional description, and cwd."""
+    """Print an elegant header with ASCII art agent name, optional description, and cwd."""
     term_width = get_terminal_width()
 
     # Box drawing characters
@@ -284,11 +347,15 @@ def print_header_box(agent_name: str, cwd: str, description: Optional[str] = Non
     # Calculate inner width (accounting for borders and padding)
     inner_width = term_width - 4  # 2 for borders, 2 for padding
 
-    # Build the header content
-    title_line = agent_name.center(inner_width)
+    # Generate ASCII art for agent name
+    ascii_lines = text_to_ascii_art(agent_name)
+    ascii_width = max(len(line) for line in ascii_lines) if ascii_lines else 0
+
+    # Use ASCII art if it fits in terminal width
+    use_ascii = ascii_width <= inner_width
 
     # Build cwd line with label
-    cwd_label = "Current dir: "
+    cwd_label = "cwd: "
     max_cwd_len = inner_width - len(cwd_label)
     cwd_display = cwd if len(cwd) <= max_cwd_len else "..." + cwd[-(max_cwd_len - 3):]
     cwd_with_label = f"{cwd_label}{cwd_display}"
@@ -297,7 +364,16 @@ def print_header_box(agent_name: str, cwd: str, description: Optional[str] = Non
     # Print the box with gradient-style coloring
     print()
     print(f"{BRIGHT_CYAN}{TL}{H * (term_width - 2)}{TR}{RESET}")
-    print(f"{BRIGHT_CYAN}{V}{RESET} {BOLD}{BRIGHT_CYAN}{title_line}{RESET} {BRIGHT_CYAN}{V}{RESET}")
+
+    if use_ascii:
+        # Print ASCII art lines centered
+        for line in ascii_lines:
+            centered_line = line.center(inner_width)
+            print(f"{BRIGHT_CYAN}{V}{RESET} {BOLD}{BRIGHT_CYAN}{centered_line}{RESET} {BRIGHT_CYAN}{V}{RESET}")
+    else:
+        # Fall back to plain text if ASCII art doesn't fit
+        title_line = agent_name.center(inner_width)
+        print(f"{BRIGHT_CYAN}{V}{RESET} {BOLD}{BRIGHT_CYAN}{title_line}{RESET} {BRIGHT_CYAN}{V}{RESET}")
 
     # Print description line if available
     if description:
