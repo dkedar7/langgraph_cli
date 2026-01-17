@@ -63,7 +63,7 @@ In the interactive loop:
 
 ```bash
 # Agent location (path/to/file.py:variable_name or module:variable)
-export DEEPAGENT_AGENT_SPEC="my_agent.py:graph"
+export DEEPAGENT_SPEC="my_agent.py:graph"
 deepagent-code
 
 # Working directory

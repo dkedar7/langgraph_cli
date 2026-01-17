@@ -327,7 +327,7 @@ def render_markdown(text: str) -> str:
 
 def parse_agent_spec(agent_spec: str) -> Tuple[str, str]:
     """
-    Parse DEEPAGENT_AGENT_SPEC format: path/to/file.py:variable_name.
+    Parse agent spec format: path/to/file.py:variable_name.
 
     Args:
         agent_spec: Agent specification string
@@ -1283,7 +1283,7 @@ def main(
     Supports environment variables for configuration:
 
     \b
-    - DEEPAGENT_AGENT_SPEC: Agent location (same formats as above)
+    - DEEPAGENT_SPEC: Agent location (same formats as above)
     - DEEPAGENT_WORKSPACE_ROOT: Working directory for the agent
     - DEEPAGENT_CONFIG: Configuration JSON string or path to JSON file
     - DEEPAGENT_STREAM_MODE: Stream mode for LangGraph (updates or values)
@@ -1298,8 +1298,8 @@ def main(
         deepagent-code -m "Hello, agent!"
     """
     try:
-        # Get environment variables
-        env_agent_spec = os.getenv('DEEPAGENT_AGENT_SPEC')
+        # Get environment variables (DEEPAGENT_SPEC preferred, DEEPAGENT_AGENT_SPEC for backwards compat)
+        env_agent_spec = os.getenv('DEEPAGENT_SPEC') or os.getenv('DEEPAGENT_AGENT_SPEC')
         env_workspace_root = os.getenv('DEEPAGENT_WORKSPACE_ROOT')
         env_config = os.getenv('DEEPAGENT_CONFIG')
         env_stream_mode = os.getenv('DEEPAGENT_STREAM_MODE', 'updates')
@@ -1318,7 +1318,7 @@ def main(
                 print(f"\n{DIM}Usage:{RESET}")
                 print(f"  deepagent-code path/to/agent.py:graph")
                 print(f"  deepagent-code mypackage.module:agent")
-                print(f"\n{DIM}Or set DEEPAGENT_AGENT_SPEC environment variable{RESET}")
+                print(f"\n{DIM}Or set DEEPAGENT_SPEC environment variable{RESET}")
                 sys.exit(1)
 
         # Change to workspace root if specified
