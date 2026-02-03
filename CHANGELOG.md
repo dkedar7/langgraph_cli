@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.5] - 2026-02-02
+
+### Added
+- `-f/--file` option to read prompt from any file
+- Single-shot mode: auto-exit after processing CLI message
+
+### Changed
+- MESSAGE is now positional argument (previously `-m/--message`)
+- Agent spec moved to `-a/--agent` option (previously positional)
+
 ## [0.1.4] - 2026-01-17
 
 ### Added

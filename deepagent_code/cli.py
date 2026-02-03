@@ -54,7 +54,7 @@ SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇",
 
 
 # Version info
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 
 # Slash command registry
